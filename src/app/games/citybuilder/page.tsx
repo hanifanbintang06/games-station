@@ -124,9 +124,18 @@ export default function CityBuilderGame() {
     }, [cityStats.population, maxPopulation]);
 
   return (
-   <main ref={containerRef} className="relative w-full h-screen bg-sky-100 overflow-hidden">
-      <Canvas camera={{ position: [-50, 150, -50], fov: 60, far: 3000 }}
-        shadows gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.3 }} >
+   <main ref={containerRef} className="relative w-full h-[100dvh] bg-sky-100 overflow-hidden">
+      <Canvas 
+          camera={{ position: [-50, 150, -50], fov: 60, far: 3000 }} 
+          shadows 
+          dpr={[1, 1.5]} // MEMBATASI RESOLUSI MAKSIMAL DI HP
+          gl={{ 
+            toneMapping: THREE.ACESFilmicToneMapping, 
+            toneMappingExposure: 1.3,
+            powerPreference: "high-performance", // Memaksa penggunaan GPU maksimal
+            antialias: false // Matikan antialias bawaan (HP sudah cukup tajam dengan kerapatan pikselnya)
+          }} 
+        >
         <GameScene
           isGridMode={isGridMode}
           setIsGridMode={setIsGridMode}

@@ -112,16 +112,29 @@ export interface PlacedItem {
 const getBuildingWarning = (item: PlacedItem, index: SpatialIndex, isLevel2Unlocked: boolean): string[] | undefined => {
   const warnings: string[] = [];
 
-  // 1. Cek akses infrastruktur jalan (Tetap sama)
+  // 1. Cek akses infrastruktur jalan
   if (isHouseZone(item.type) || isCommercialZone(item.type) || item.type === 'ZONE_INDUSTRIAL_L1' || item.type === 'RESOURCE_GARBAGE' || item.type === 'SERVICE_HOSPITAL' || item.type === 'SERVICE_POLICE' || item.type === 'SERVICE_FIREFIGHTER' || item.type === 'EDUCATION_ELEMENTARY' || item.type === 'EDUCATION_JUNIOR' || item.type === 'EDUCATION_HIGH') {
-  let hasRoad = false;
-    if (item.industrialVariant === 'FACTORY2') {
+    let hasRoad = false;
+    
+    // PERBAIKAN: Jika ini bangunan 2x2, cek keempat ubin footprint-nya
+    if (FIXED_2X2_TOOLS.includes(item.type)) {
+      hasRoad = 
+        hasAdjacentRoad(index, item.x, item.z) ||           // Cek ubin Kiri Atas
+        hasAdjacentRoad(index, item.x + 1, item.z) ||       // Cek ubin Kanan Atas
+        hasAdjacentRoad(index, item.x, item.z + 1) ||       // Cek ubin Kiri Bawah
+        hasAdjacentRoad(index, item.x + 1, item.z + 1);     // Cek ubin Kanan Bawah
+    } 
+    // Pengecekan untuk Factory2 (1x2 atau 2x1) tetap dipertahankan
+    else if (item.industrialVariant === 'FACTORY2') {
       const x2 = item.footprintDirection === 'X' ? item.x + 1 : item.x;
       const z2 = item.footprintDirection === 'Z' ? item.z + 1 : item.z;
       hasRoad = hasAdjacentRoad(index, item.x, item.z) || hasAdjacentRoad(index, x2, z2);
-    } else {
+    } 
+    // Standar 1x1
+    else {
       hasRoad = hasAdjacentRoad(index, item.x, item.z);
     }
+
     if (!hasRoad) warnings.push("Tidak ada akses jalan");
   }
 
@@ -1024,9 +1037,9 @@ const robberyIncidentRef = useRef<{ x: number; z: number } | null>(null);
 
         // FASE 4: Terapkan Alokasi Pekerja & Status Rumah ke Data Akhir
         const finalItems = afterGrowth.map(item => {
-          if (item.type === 'ZONE_HOUSE_L1' && !item.isSecondary) {
+          if (isHouseZone(item.type) && !item.isSecondary) {
             const houseData = housesWithWorkers.find(h => h.x === item.x && h.z === item.z);
-            const emp = houseData ? houseData.employed : 0; // Jika rumah offline, pekerja 0
+            const emp = houseData ? houseData.employed : 0;
             if (item.employedOccupants !== emp) {
               hasChanges = true;
               return { ...item, employedOccupants: emp };
@@ -1221,7 +1234,7 @@ const robberyIncidentRef = useRef<{ x: number; z: number } | null>(null);
         const withRotations = remaining.map((item) => {
         let newItem = { ...item };
 
-        const isStandardMovable = newItem.type === 'ZONE_HOUSE_L1' ||
+        const isStandardMovable = isHouseZone(newItem.type) ||
                   newItem.type === 'ZONE_COMMERCIAL_L1' ||
                   (newItem.type === 'ZONE_INDUSTRIAL_L1' && newItem.industrialVariant === 'FACTORY1') ||
                   newItem.type === 'RESOURCE_ELECTRIC' ||
@@ -1233,7 +1246,10 @@ const robberyIncidentRef = useRef<{ x: number; z: number } | null>(null);
                   ((newItem.type === 'EDUCATION_ELEMENTARY' || newItem.type === 'EDUCATION_JUNIOR' || newItem.type === 'EDUCATION_HIGH' || newItem.type === 'ZONE_COMMERCIAL_L2') && !newItem.isSecondary);
 
         if (isStandardMovable) {
-          newItem.rotation = getHouseRotation(newItem.x, newItem.z, remaining, newItem.rotation);
+          const is2x2 = newItem.type === 'EDUCATION_ELEMENTARY' || newItem.type === 'EDUCATION_JUNIOR' || newItem.type === 'EDUCATION_HIGH' || newItem.type === 'ZONE_COMMERCIAL_L2';
+          newItem.rotation = is2x2
+            ? get2x2Rotation(newItem.x, newItem.z, remaining, newItem.rotation)
+            : getHouseRotation(newItem.x, newItem.z, remaining, newItem.rotation);
         } else if (newItem.type === 'ZONE_INDUSTRIAL_L1' && newItem.industrialVariant === 'FACTORY2' && !newItem.isSecondary) {
           newItem.rotation = getFactory2Rotation(newItem, remaining);
         } else if (newItem.type === 'ROAD') {
@@ -1444,6 +1460,35 @@ const robberyIncidentRef = useRef<{ x: number; z: number } | null>(null);
     return item.rotation; // Tetap pada rotasi awal jika syarat 2 ubin jalan tidak terpenuhi
   };
 
+  // BARU: Rotasi khusus bangunan footprint 2x2 — cek jalan di SEMUA sisi luar footprint
+  // (bukan cuma tetangga anchor tile, karena anchor+1 arah kanan/bawah itu tile sekunder
+  // milik bangunan itu sendiri, bukan jalan — makanya getHouseRotation gagal untuk 2x2).
+  const get2x2Rotation = (anchorX: number, anchorZ: number, allItems: PlacedItem[], currentRotation: number) => {
+    const hasRoadAt = (x: number, z: number) => allItems.some((i) => i.type === 'ROAD' && i.x === x && i.z === z);
+
+    const hasRight = hasRoadAt(anchorX + 2, anchorZ) || hasRoadAt(anchorX + 2, anchorZ + 1);
+    const hasLeft = hasRoadAt(anchorX - 1, anchorZ) || hasRoadAt(anchorX - 1, anchorZ + 1);
+    const hasFront = hasRoadAt(anchorX, anchorZ + 2) || hasRoadAt(anchorX + 1, anchorZ + 2);
+    const hasBack = hasRoadAt(anchorX, anchorZ - 1) || hasRoadAt(anchorX + 1, anchorZ - 1);
+
+    const FACE_LEFT = Math.PI;
+    const FACE_RIGHT = 0;
+    const FACE_FRONT = -Math.PI / 2;
+    const FACE_BACK = Math.PI / 2;
+
+    if (currentRotation === FACE_RIGHT && hasRight) return currentRotation;
+    if (currentRotation === FACE_LEFT && hasLeft) return currentRotation;
+    if (currentRotation === FACE_FRONT && hasFront) return currentRotation;
+    if (currentRotation === FACE_BACK && hasBack) return currentRotation;
+
+    if (hasRight) return FACE_RIGHT;
+    if (hasLeft) return FACE_LEFT;
+    if (hasFront) return FACE_FRONT;
+    if (hasBack) return FACE_BACK;
+
+    return currentRotation;
+  };
+
   // BARU: Penempatan instan bangunan footprint tetap 2x2 — klik = taruh, tidak lewat drag start/end
   const placeFixed2x2Building = (anchorX: number, anchorZ: number) => {
     const footprintTiles = [
@@ -1495,7 +1540,7 @@ const robberyIncidentRef = useRef<{ x: number; z: number } | null>(null);
 
       const withRotations = combinedItems.map((item) => {
         if (item.type === activeTool && !item.isSecondary) {
-          return { ...item, rotation: getHouseRotation(item.x, item.z, combinedItems, item.rotation) };
+          return { ...item, rotation: get2x2Rotation(item.x, item.z, combinedItems, item.rotation) };
         }
         return item;
       });
@@ -1745,7 +1790,7 @@ const robberyIncidentRef = useRef<{ x: number; z: number } | null>(null);
       const withRotations = combinedItems.map((item) => {
         let newItem = { ...item };
 
-        const isStandardMovable = newItem.type === 'ZONE_HOUSE_L1' ||
+        const isStandardMovable = isHouseZone(newItem.type) ||
                   newItem.type === 'ZONE_COMMERCIAL_L1' ||
                   (newItem.type === 'ZONE_INDUSTRIAL_L1' && newItem.industrialVariant === 'FACTORY1') ||
                   newItem.type === 'RESOURCE_ELECTRIC' ||
@@ -1757,7 +1802,10 @@ const robberyIncidentRef = useRef<{ x: number; z: number } | null>(null);
                   ((newItem.type === 'EDUCATION_ELEMENTARY' || newItem.type === 'EDUCATION_JUNIOR' || newItem.type === 'EDUCATION_HIGH' || newItem.type === 'ZONE_COMMERCIAL_L2') && !newItem.isSecondary);
 
         if (isStandardMovable) {
-          newItem.rotation = getHouseRotation(newItem.x, newItem.z, combinedItems, newItem.rotation);
+          const is2x2 = newItem.type === 'EDUCATION_ELEMENTARY' || newItem.type === 'EDUCATION_JUNIOR' || newItem.type === 'EDUCATION_HIGH' || newItem.type === 'ZONE_COMMERCIAL_L2';
+          newItem.rotation = is2x2
+            ? get2x2Rotation(newItem.x, newItem.z, combinedItems, newItem.rotation)
+            : getHouseRotation(newItem.x, newItem.z, combinedItems, newItem.rotation);
         } else if (newItem.type === 'ZONE_INDUSTRIAL_L1' && newItem.industrialVariant === 'FACTORY2' && !newItem.isSecondary) {
           newItem.rotation = getFactory2Rotation(newItem, combinedItems);
         } else if (newItem.type === 'ROAD') {
