@@ -6,7 +6,8 @@ import { IconProps } from "@phosphor-icons/react";
 
 interface SidebarItemProps {
   href: string;
-  icon: React.ElementType;
+  // PERBAIKAN DI SINI: Beri tahu TypeScript bahwa elemen ini menerima IconProps
+  icon: React.ElementType<IconProps>; 
 }
 
 export default function SidebarItem({ href, icon: Icon }: SidebarItemProps) {
