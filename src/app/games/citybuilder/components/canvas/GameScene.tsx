@@ -4,9 +4,30 @@ import CameraRig from './CameraRig';
 import { GRID_SIZE, TILE_SIZE } from '../../core/constants';
 import { BuildTool, DeleteBounds, DeleteRequest } from '../../page';import { EffectComposer } from '@react-three/postprocessing';
 import OutlinePass from './OutlinePass';
+import { useEffect, useState } from 'react';
 
 // di dalam komponen GameScene, sebelum return:
 // (perlu akses ke normal pass texture)
+
+// Hook untuk mendeteksi apakah layar berukuran seluler (di bawah 768px)
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Cek saat komponen pertama kali dimuat
+    handleResize();
+
+    // Dengarkan perubahan ukuran layar
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return isMobile;
+}
 
 interface GameSceneProps {
   isGridMode: boolean;
@@ -55,6 +76,8 @@ export default function GameScene({
   onDispatchHandled,
   onIncidentUpdate,
 }: GameSceneProps) {
+  const isMobile = useIsMobile();
+
   const mapCenter = (GRID_SIZE * TILE_SIZE) / 2;
   const mapSize = GRID_SIZE * TILE_SIZE;
 
@@ -67,7 +90,10 @@ export default function GameScene({
         position={[mapCenter + 800, 1000, mapCenter + 400]}
         intensity={2.5}
         castShadow
-        shadow-mapSize={[4096, 4096]}
+        
+        // 2. UBAH BAGIAN INI (Resolusi kecil untuk HP, tinggi untuk PC)
+        shadow-mapSize={isMobile ? [512, 512] : [4096, 4096]}
+
         shadow-camera-left={-mapSize / 2}
         shadow-camera-right={mapSize / 2}
         shadow-camera-top={mapSize / 2}
