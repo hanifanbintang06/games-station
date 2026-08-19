@@ -135,6 +135,17 @@ export default function CityBuilderGame() {
             powerPreference: "high-performance", // Memaksa penggunaan GPU maksimal
             antialias: false // Matikan antialias bawaan (HP sudah cukup tajam dengan kerapatan pikselnya)
           }} 
+          onCreated={({ gl }) => {
+            gl.domElement.addEventListener('webglcontextlost', (e) => {
+              e.preventDefault();
+              console.error('[Canvas] WebGL context LOST');
+              alert('WebGL context lost! Cek console.'); // sementara, buat testing di HP
+            });
+            gl.domElement.addEventListener('webglcontextrestored', () => {
+              console.log('[Canvas] WebGL context restored');
+            });
+            console.log('[Canvas] created OK', gl.getContextAttributes());
+          }}
         >
         <GameScene
           isGridMode={isGridMode}
