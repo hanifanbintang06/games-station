@@ -123,6 +123,13 @@ export default function CityBuilderGame() {
       }
     }, [cityStats.population, maxPopulation]);
 
+    // SEMENTARA (buat debugging HP) — hapus/comment sebelum production final
+    useEffect(() => {
+      if (typeof window !== 'undefined') {
+        import('eruda').then((eruda) => eruda.default.init());
+      }
+    }, []);
+
   return (
    <main ref={containerRef} className="relative w-full h-[100dvh] bg-sky-100 overflow-hidden">
       <Canvas 
