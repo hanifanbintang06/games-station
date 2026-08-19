@@ -90,7 +90,7 @@ export default function GameScene({
         position={[mapCenter + 800, 1000, mapCenter + 400]}
         intensity={2.5}
         castShadow
-        
+
         // 2. UBAH BAGIAN INI (Resolusi kecil untuk HP, tinggi untuk PC)
         shadow-mapSize={isMobile ? [512, 512] : [4096, 4096]}
 
@@ -132,9 +132,11 @@ export default function GameScene({
         maxPanDistance={mapSize}
       />
 
-      <EffectComposer>
-        <OutlinePass />
-      </EffectComposer>
+      {!isMobile && (
+        <EffectComposer>
+          <OutlinePass />
+        </EffectComposer>
+      )}
 
     </>
   );
